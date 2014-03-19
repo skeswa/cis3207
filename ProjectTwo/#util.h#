@@ -1,0 +1,60 @@
+#define CHAR_PIPE         '|'
+#define CHAR_CARROT_RIGHT '>'
+#define CHAR_CARROT_LEFT  '<'
+
+#define READ_STATUS_WAITING 0
+#define READ_STATUS_PROG    1
+#define READ_STATUS_ARGS    2
+#define READ_STATUS_IN      3
+#define READ_STATUS_OUT     4
+#define READ_STATUS_PIPE    5
+
+#define PATH_MAX 200
+
+/**************************** STRUCT DECLARATIONS ****************************/
+
+// Represents a process - has information about its execution
+typedef struct Process {
+  FILE *in;             // Where stdin is piped
+  FILE *out;            // Where stdout is piped 
+  int status;           // Execution status
+  char *prog;           // The program string
+  char **argv;          // Arguments for execution
+  pid_t pid;            // The id of the process
+  struct Process *next; // Linked list of piped processes
+} Process;
+
+/*************************** FUNCTION DECLARATIONS ***************************/
+
+/*  Returns the index of the next non-whitespace character or -1. 
+    Takes a string and an initial offset as parameters.
+    Returns the next non-whitespace index or -1. 
+    */
+unsigned int advance(char *str, unsigned int cursor, unsigned char fancy);
+/*  Processes a whitespace separated args list into a char array.
+    Takes a whitespace separated string and its length.
+    Returns a char * array.
+    */
+char **processArgList(char *str, size_t len);
+/*  Processes a string to a file pointer.
+    Takes a string representing a file.
+    Returns the appropriate file pointer or null.
+    */
+FILE *processFile(char *str);
+/*  The primary utility method; accounts for and processes commandline arguments
+    and gives back a Process struct representing the critical data thereof.
+    Takes a string commandline argument and its length.
+    Returns a process object.
+    */
+Process *read(char *str, size_t len);
+/*  Searches for the given executable name in the PATH env var. If
+    one is found, its filesystem path is returned as a result.
+    Takes an executasble name.
+    Returns the fully qualified path of the executable.
+    */
+int pathOf(char *prog);
+/*  Checks if a the file at the given path is executable.
+    Takes the path to the potential executable.
+    Returns true if the file at the path is an executable.
+    */
+unsigned int isExecutable(char *exePath);

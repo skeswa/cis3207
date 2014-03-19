@@ -2,201 +2,102 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
-#include "shell.h"
+#include <unistd.h>
+#include <sys/wait.h>
+#include "util.h"
 
 /*************************** FUNCTION DECLARATIONS ***************************/
 
-/*  Returns the index of the next non-whitespace character or -1. 
-    Takes a string and an initial offset as parameters.
-    Returns the next non-whitespace index or -1. 
-    */
-unsigned int advance(char *str, unsigned int cursor, unsigned char fancy);
-/*  Processes a whitespace separated args list into a char array.
-    Takes a whitespace separated string and its length.
-    Returns a char * array.
-    */
-char **processArgList(char *str, size_t len);
-/*  Processes a string to a file pointer.
-    Takes a string representing a file.
-    Returns the appropriate file pointer or null.
-    */
-FILE *processFile(char *str);
-/*  The primary utility method; accounts for and processes commandline arguments
-    and gives back a Process struct representing the critical data thereof.
-    Takes a string commandline argument and its length.
-    Returns a process object.
-    */
-Process *read(char *str, size_t len);
+// Trims whitespace off of the back of the string
+void curtail(char *str) {
+  char *end = str + strlen(str) - 1;
+  while(end >= str && isspace(*end)) end--;
+  *(end + 1) = 0; // Advance the null terminator
+}
+
+void doExecution() {
+    pid_t pid;
+    Process *proc;
+    char *input = (char *) malloc(sizeof(char) * (INPUT_BUFFER_SIZE + 1)); 
+    char *currdir = (char *) malloc(sizeof(char) * (CURRDIR_BUFFER_SIZE + 1));
+    char *hostname = (char *) malloc(sizeof(char) * (CURRDIR_BUFFER_SIZE + 1));
+    char *fgetsResult;
+    // Read the input
+    memset(input, 0, (INPUT_BUFFER_SIZE + 1));
+    memset(currdir, 0, (CURRDIR_BUFFER_SIZE + 1));
+    memset(hostname, 0, (CURRDIR_BUFFER_SIZE + 1));
+    // Read the machine name
+    gethostname(hostname, CURRDIR_BUFFER_SIZE);
+    // The loop that goes for days
+    while (1) {
+        // Read current directory
+        getcwd(currdir, CURRDIR_BUFFER_SIZE);
+        printf("%s> [%s]# ", hostname, currdir);
+        // Set the buffer to "empty"
+        input[0] = 0;
+        // Read from command line
+        fgetsResult = fgets(input, INPUT_BUFFER_SIZE, stdin);
+        // Make sure the input string is curtailed first
+        curtail(input);
+        // Continue with loop
+        if (strlen(input) >= 1) {
+            // Read proc
+            proc = readCommand(input, strlen(input));
+            // Verify that the executable exists
+            // Put the prog in argv
+            if (proc->argv) proc->argv[0] = proc->prog;
+            else {
+                // We have to make up an argv
+                proc->argv = (char **) malloc(sizeof(char *) * 2);
+                proc->argv[0] = proc->prog;
+                proc->argv[1] = NULL;
+            }
+            // EXEC BREH
+            pid = fork();
+            if (pid > 0) {
+                // This is the parent
+                proc->pid = pid;
+                if (!(proc->backgrounded)) {
+                    // Wait for the kid
+                    do {
+                        pid = wait(&(proc->status));
+                        // if (pid != proc->pid) process_terminated(pid);
+                    } while (pid != proc->pid);
+                    // Child has now exited
+                    // printf("Child exited with status %d.\n", proc->status);
+                } else {
+                    printf("Child started in background.\n");
+                }
+            } else if (pid < 0) {
+                printf("THE FORK FAILED....PANICCCCCCCCCCCCCCC!\n");
+                exit(1);
+            } else {
+                // This is the child
+                if (proc->backgrounded) {
+                    // IF backgrounding - then we have to do something
+                    setpgid(0, 0);
+                }
+                execvp(proc->prog, proc->argv);
+                // If we got this far the call failed
+                printf("Could not execute the command as entered - please try again.");
+                exit(1);
+            }
+        } else if (fgetsResult == NULL) {
+            printf("Received Ctrl + D (the EOF) - now exiting...\n");
+            exit(0);
+        } else {
+            // Empty input - so don't do anything
+        }
+    }
+}
 
 /**************************** PROGRAM ENTRY POINT ****************************/
 
 /*  The main function - starts the shell */
 int main() {
-    char *s = "ls -al . < in.txt > out.txt | grep . | cd work";
-    Process *p = read(s, strlen(s));
-    printf("%s\n", p->prog);
+    /*char *s = "ls -al . < in.txt > out.txt | grep . | cd work";
+    Process *p = readCommand(s, strlen(s));
+    printf("%s\n", p->prog);*/
+    doExecution();
     return 0;
-}
-
-/************************** FUNCTION IMPLEMENTATIONS *************************/
-
-unsigned int advance(char *str, unsigned int cursor, unsigned char fancy) {
-    size_t len = strlen(str);
-    unsigned int i = 0;
-    for (i = cursor; i < len; i++) {
-        if (!fancy) {
-            if (!(isspace(str[i]))) {
-                return i;
-            }
-        } else {
-            if (str[i] == CHAR_PIPE || str[i] == CHAR_CARROT_RIGHT || str[i] == CHAR_CARROT_LEFT) {
-                return i;
-            }
-        }
-    }
-    return len;
-}
-
-char **processArgList(char *str, size_t len) {
-    unsigned int i = 0, j = 0, inWhitespace = 1, count = 0, limit = 0;
-    char *argstr = (char *) malloc(len + 1), **argv;
-    memcpy(argstr, str, len);
-    argstr[len] = 0; // Assert the null char
-    // Calculate the limit
-    limit = advance(str, 0, 1);
-    for (i = 0; i < limit; i++) {
-        if (isspace(argstr[i])) {
-            argstr[i] = 0;
-            inWhitespace = 1;
-        } else {
-            if (inWhitespace) {
-                count++;
-                inWhitespace = 0;
-            }
-        }
-    }
-    // Allocate argv
-    argv = (char **) malloc(sizeof(char *) * (count + 2));
-    j = 1;
-    inWhitespace = 1;
-    // Loop through record the locations of all the sub strings
-    for (i = 0; i < limit; i++) {
-        if (!argstr[i]) {
-            inWhitespace = 1;
-        } else {
-            if (inWhitespace) {
-                argv[j] = (char *) (argstr + i);
-                j++;
-                inWhitespace = 0;
-            }
-        }
-    }
-    // Must be null terminated
-    argv[count + 1] = NULL;
-    return argv;
-}
-
-FILE *processFile(char *str) {
-    return fopen(str, "rw");
-}
-
-Process *read(char *str, size_t len) {
-    int cursor = -1;
-    unsigned int i, end = 0, status = READ_STATUS_PROG;
-    char c, *s;
-    Process *p = (Process *) malloc(sizeof(Process));
-    // Read through the command character by character
-    for (i = 0; i < (len + 1); i++) {
-        c = (i < len) ? str[i] : 0;
-        // This switch manages what we're currently doing
-        switch (status) {
-            /**** Reading Program Location ****/ 
-            case READ_STATUS_PROG:
-                if (cursor == -1) cursor = (i = advance(str, i, 0)); // Set the cursor if it hasn't been set yet
-                end = i; // Update the end
-                // Check if we're done yet
-                if (isspace(c) || !c) {
-                    // We are done with reading in the program
-                    p->prog = (char *) malloc(end - cursor + 1);
-                    // Copy the prog into s
-                    memcpy(p->prog, (cursor + str), (end - cursor + 1));
-                    (p->prog)[end - cursor] = 0; // Assert the null char
-                    // Last but not least, increment the status & reset the cursor
-                    status = READ_STATUS_ARGS;
-                    cursor = -1;
-                }
-                break;
-            /**** Reading Program Arguments ****/ 
-            case READ_STATUS_ARGS:
-                if (cursor == -1) cursor = (i = advance(str, i, 0)); // Set the cursor if it hasn't been set yet
-                end = i; // Update the end
-                if (c == CHAR_PIPE || c == CHAR_CARROT_RIGHT || c == CHAR_CARROT_LEFT || !c) {
-                    // We are done with reading in the args list string - move on
-                    p->argv = processArgList(str + cursor, (end - cursor + 1));
-                    // Last but not least, increment the status & reset the cursor
-                    cursor = -1;
-                    if (c == CHAR_PIPE) status = READ_STATUS_PIPE;
-                    else if (c == CHAR_CARROT_RIGHT) status = READ_STATUS_OUT;
-                    else if (c == CHAR_CARROT_LEFT) status = READ_STATUS_IN;
-                    else {
-                        // If we're here, we're done reading str - we're outta here
-                        return p;
-                    }
-                }
-                break;
-            /**** Reading Stdin/Stdout Replacement ****/ 
-            case READ_STATUS_IN:
-            case READ_STATUS_OUT:
-                // Before we do anything - account for the right pointer
-                if (cursor == -1) { 
-                    cursor = (i = advance(str, i, 0)); // Set the cursor if it hasn't been set yet
-                    c = str[i];
-                }
-                end = i; // Update the end
-                if (isspace(c) || !c) {
-                    // We are done with reading in the infile
-                    s = (char *) malloc(end - cursor + 1);
-                    memcpy(s, (cursor + str), end - cursor + 1);
-                    s[end - cursor] = 0; // Assert the null char
-                    if (status == READ_STATUS_IN) p->in = processFile(s);
-                    else p->out = processFile(s);
-                    // We need to advance the cursor again to see whats next
-                    if (!c) return p;
-                    else {
-                        i = advance(str, i, 1);
-                        // Check what we have now
-                        if (i >= len) {
-                            return p;
-                        } else {
-                            c = str[i];
-                            cursor = -1;
-                            if (c == CHAR_PIPE) status = READ_STATUS_PIPE;
-                            else if (c == CHAR_CARROT_RIGHT) status = READ_STATUS_OUT;
-                            else if (c == CHAR_CARROT_LEFT) status = READ_STATUS_IN;
-                        }
-                    }
-                }
-                break;
-            /**** Reading Stdout Replacement ****/ 
-            case READ_STATUS_PIPE:
-                if (cursor == -1) cursor = (i = advance(str, i, 0)); // Set the cursor if it hasn't been set yet
-                end = advance(str, i, 1); // Update the end
-                // We need to call read recursively here
-                p->next = read(str + cursor, end - cursor + 1);
-                // Continue from after the pipe
-                i = end;
-                if (i >= len) {
-                    return p;
-                } else {
-                    c = str[i];
-                    cursor = -1;
-                    if (c == CHAR_PIPE) status = READ_STATUS_PIPE;
-                    else if (c == CHAR_CARROT_RIGHT) status = READ_STATUS_OUT;
-                    else if (c == CHAR_CARROT_LEFT) status = READ_STATUS_IN;
-                }
-                break;
-        }
-    }
-    // Return p by default
-    return p;
 }
