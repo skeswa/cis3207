@@ -5,6 +5,8 @@
 #include <limits.h>
 #include <libgen.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "util.h"
@@ -67,8 +69,12 @@ char **processArgList(char *str, size_t len) {
     return argv;
 }
 
-FILE *processFile(char *str) {
-    return fopen(str, "rw");
+int processInfile(char *str) {
+    return open(str, O_RDONLY);
+}
+
+int processOutfile(char *str) {
+    return open(str, O_WRONLY|O_CREAT,S_IRWXU|S_IRWXG|S_IRWXO);
 }
 
 Process *readCommand(char *str, size_t len) {
@@ -78,6 +84,8 @@ Process *readCommand(char *str, size_t len) {
     Process *p = (Process *) malloc(sizeof(Process));
     // Fix defaults
     p->backgrounded = 0;
+    p->in = -1;
+    p->out = -1;
     // Read through the command character by character
     for (i = 0; i < (len + 1); i++) {
         c = (i < len) ? str[i] : 0;
@@ -132,8 +140,8 @@ Process *readCommand(char *str, size_t len) {
                     s = (char *) malloc(end - cursor + 1);
                     memcpy(s, (cursor + str), end - cursor + 1);
                     s[end - cursor] = 0; // Assert the null char
-                    if (status == READ_STATUS_IN) p->in = processFile(s);
-                    else p->out = processFile(s);
+                    if (status == READ_STATUS_IN) p->in = processInfile(s);
+                    else p->out = processOutfile(s);
                     // We need to advance the cursor again to see whats next
                     if (!c) return p;
                     else {

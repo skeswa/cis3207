@@ -19,8 +19,8 @@
 
 // Represents a process - has information about its execution
 typedef struct Process {
-  FILE *in;             // Where stdin is piped
-  FILE *out;            // Where stdout is piped 
+  int in;               // Where stdin is piped
+  int out;              // Where stdout is piped 
   int status;           // Execution status
   char *prog;           // The program string
   char **argv;          // Arguments for execution
@@ -45,7 +45,12 @@ char **processArgList(char *str, size_t len);
     Takes a string representing a file.
     Returns the appropriate file pointer or null.
     */
-FILE *processFile(char *str);
+int processInfile(char *str);
+/*  Processes a string to a file pointer.
+    Takes a string representing a file.
+    Returns the appropriate file pointer or null.
+    */
+int processOutfile(char *str);
 /*  The primary utility method; accounts for and processes commandline arguments
     and gives back a Process struct representing the critical data thereof.
     Takes a string commandline argument and its length.

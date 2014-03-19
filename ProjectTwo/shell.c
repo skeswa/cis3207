@@ -3,12 +3,19 @@
 #include <ctype.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "util.h"
 
 /*************************** FUNCTION DECLARATIONS ***************************/
 
-// Trims whitespace off of the back of the string
+// TODO HANDLE CD HERE
+
+// Trims whitespace off of the back of the string.
+// Takes a string to trim the whitespace off the back of.
+// Returns nothing.
 void curtail(char *str) {
   char *end = str + strlen(str) - 1;
   while(end >= str && isspace(*end)) end--;
@@ -22,6 +29,7 @@ void doExecution() {
     char *currdir = (char *) malloc(sizeof(char) * (CURRDIR_BUFFER_SIZE + 1));
     char *hostname = (char *) malloc(sizeof(char) * (CURRDIR_BUFFER_SIZE + 1));
     char *fgetsResult;
+    //int pipefd[2];
     // Read the input
     memset(input, 0, (INPUT_BUFFER_SIZE + 1));
     memset(currdir, 0, (CURRDIR_BUFFER_SIZE + 1));
@@ -53,6 +61,7 @@ void doExecution() {
                 proc->argv[1] = NULL;
             }
             // EXEC BREH
+            //pipe(pipefd);
             pid = fork();
             if (pid > 0) {
                 // This is the parent
@@ -76,6 +85,20 @@ void doExecution() {
                 if (proc->backgrounded) {
                     // IF backgrounding - then we have to do something
                     setpgid(0, 0);
+                }
+                // Input redirection
+                if (proc->in != -1) {
+                    // Replace stdin with infile
+                    close(0);
+                    dup(proc->in);
+                    close(proc->in);
+                }
+                // Output redirection
+                if (proc->out != -1) {
+                    // Replace stdout with outfile
+                    close(1);
+                    dup(proc->out);
+                    close(proc->out);
                 }
                 execvp(proc->prog, proc->argv);
                 // If we got this far the call failed
