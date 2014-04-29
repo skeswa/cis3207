@@ -85,5 +85,12 @@ void *client(void *_args) {
 }
 
 void *server(void *_args) {
+    Message *m = (Message *) malloc(sizeof(Message));
+    size_t messageLength;
+    while ((messageLength = mq_receive(outboxes[args->id], (char *) buffer, 100, NULL)) > 0) {
+        
+    }
+    if (messageLength < 0) perror("There was an issue reading messages on the server");
+    else if (messageLength == 0) printf("Got a 0 sized message - and that isn't a thing...\n");
     return NULL;
 }
