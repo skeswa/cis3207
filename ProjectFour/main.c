@@ -104,6 +104,7 @@ void *client(void *_args) {
     srand(time(NULL));
 
     for (cycle = 0; cycle < 20; cycle++) {
+        printf("Thread #%d beginning cycle %d\n", args->id, cycle);
         // Create dat message doe
         m = (Message *) malloc(sizeof(Message));
         // Set the message
@@ -143,6 +144,8 @@ void *client(void *_args) {
         printf("Thread #%d waiting to request resources for %f seconds\n", args->id, waitTime / 1000000);
         usleep(floor(waitTime));
     }
+
+    printf("Thread #%d has completed 20 cycles - now exiting\n", args->id);
     return NULL;
 }
 
