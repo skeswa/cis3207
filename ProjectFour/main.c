@@ -1,22 +1,32 @@
-#define INBOX_QUEUE_NAME "/inbx"
-#define WAITBOX_QUEUE_NAME "/wtbx"
-#define OUTBOX_QUEUE_NAME /otbx
-#define OUTBOX_QUEUE_NAME_LEN 7
+#define INBOX_QUEUE_NAME "/inbx"    // The name of the server in message queue
+#define WAITBOX_QUEUE_NAME "/wtbx"  // The name of the server wat message queue
+#define OUTBOX_QUEUE_NAME /otbx     // The name of the client out message queue
+#define OUTBOX_QUEUE_NAME_LEN 7     // The size of the name of the cient out message queue
 
-#include "main.h"
+#include "main.h"                   // The header file for this file
 
-mqd_t inbox, waitbox;
-mqd_t outboxes[4];
-pthread_t clients[4];
-pthread_t _server;
-FILE *lawg;
-int flags;
-mode_t perms;
-struct mq_attr *inAttrs, *waitAttrs;
+mqd_t inbox, waitbox;   // Message queue references
+mqd_t outboxes[4];      // More message queue references
+pthread_t clients[4];   // Thread refrences for the client
+pthread_t _server;      // Thread reference for the server
+FILE *lawg;             // The file system log file
+                        
+int flags;              // Flags for the message queues
+mode_t perms;           // Permissions for message queues
+struct mq_attr *inAttrs, *waitAttrs; // Attributes for message queues
 
+// Function executes client thread logic
+// <-   args = the arguments for the client thread
+// ->   
 void *client(void *args);
+// Function executes server thread logic
+// <-   args = the arguments for the server thread
+// ->   
 void *server(void *args);
 
+// Function generates new message queue attributes
+// <-   
+// ->   a pointer to mq attributes
 struct mq_attr *newAttr() {
     struct mq_attr *a = (struct mq_attr *) malloc(sizeof(struct mq_attr));
     a->mq_flags = 0;
@@ -25,7 +35,9 @@ struct mq_attr *newAttr() {
     a->mq_curmsgs = 0;
     return a;
 }
-
+// Function creates a new message
+// <-   type = type of message, count = how many resources are in play, senderId = is of the sender
+// ->   the new message
 Message *newMessage(byte type, size_t count, byte senderId) {
     Message *m = (Message *) malloc(sizeof(Message));
     m->type = type;
@@ -33,11 +45,15 @@ Message *newMessage(byte type, size_t count, byte senderId) {
     m->senderId = senderId;
     return m;
 }
-
+// Function clones an existing message
+// <-   existingMessage = the message to clone
+// ->   the cloned message
 Message *cloneMessage(Message *existingMessage) {
     return newMessage(existingMessage->type, existingMessage->count, existingMessage->senderId);
 }
-
+// Function generates random number between 0 and 1
+// <-   
+// ->   the random number
 float randomFloat() {
     float r = (float) rand() / (float) RAND_MAX;            
     return r;
@@ -138,8 +154,7 @@ void *client(void *_args) {
             perror("Could not send free to server  - exiting");
             return NULL;
         }
-        // Wait for server response
-        // Wait for T2
+
         waitTime = (args->type ? 2000000 : 3000000);
         printf("Thread #%d waiting to request resources for %f seconds\n", args->id, waitTime / 1000000);
         usleep(floor(waitTime));
