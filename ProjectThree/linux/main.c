@@ -2,12 +2,15 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <unistd.h>
 #include <time.h>
 
-#define BUFFER_SIZE     20      /* total number of slots */
-#define NUM_PRUDUCERS   3       /* total number of producers */
-#define NUM_CONSUMERS   4       /* total number of consumers */
-#define NUM_ITEMS       100      /* number of items produced/consumed */
+#define PRODUCER_SPEED      50000       /* producer thread sleep time in micro seconds */
+#define CONSUMER_SPEED      80000       /* consumer thread sleep time in micro seconds */
+#define BUFFER_SIZE         20          /* total number of slots */
+#define NUM_PRUDUCERS       3           /* total number of producers */
+#define NUM_CONSUMERS       4           /* total number of consumers */
+#define NUM_ITEMS           30          /* number of items produced/consumed */
 
 
 void *Producer(void *args);
@@ -63,7 +66,8 @@ void *Producer(void *args) {
     int id;
 
     id = *((int *) args);
-    for (i = 0; i < NUM_ITEMS; i++) {
+    for (i = 0; i < NUM_ITEMS * NUM_CONSUMERS; i++) {
+        usleep(PRODUCER_SPEED);
         item = (piece) (rand() % 255);   
         /* If there are no empty slots, wait */
         printf("Producer #%d:\tWaiting for one of the slots to open up\n", id);
@@ -81,7 +85,7 @@ void *Producer(void *args) {
         /* Increment the number of full slots */
         sem_post(&buffer.full);
     }
-    printf("Producer #%d:\tFinished producing %d items\n", id, NUM_ITEMS);
+    printf("Producer #%d:\tFinished producing %d items\n", id, NUM_ITEMS * NUM_CONSUMERS);
 
     return NULL;
 }
@@ -92,7 +96,8 @@ void *Consumer(void *args) {
     int id;
 
     id = *((int *) args);
-    for (i = 0; i < NUM_ITEMS; i++) {
+    for (i = 0; i < NUM_ITEMS * NUM_PRUDUCERS; i++) {
+        usleep(CONSUMER_SPEED);
         /* If there are no full slots, wait */
         printf("Consumer #%d:\tWaiting for one of the slots to fill up\n", id);
         sem_wait(&buffer.full);
@@ -108,7 +113,7 @@ void *Consumer(void *args) {
         /* Increment the number of full slots */
         sem_post(&buffer.empty);
     }
-    printf("Consumer #%d:\tFinished consuming %d items\n", id, NUM_ITEMS);
+    printf("Consumer #%d:\tFinished consuming %d items\n", id, NUM_ITEMS * NUM_PRUDUCERS);
 
     return NULL;
 }
